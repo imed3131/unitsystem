@@ -431,3 +431,144 @@ class Test(TestBase, table=True):
     vlReadings: List[VLReading] = Relationship(
         back_populates="test", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
+
+
+#===========================================================================
+
+class TestTemplateGeneralInfo(SQLModel, table=True):  # Changed to table=True
+    __tablename__ = "testtemplategeneralinfo"
+    id: UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    name: str
+    value: str
+    isLink: bool
+    link: Optional[str] = None
+    isFile: bool
+    test_template_id: Optional[UUID] = Field(default=None, foreign_key="testtemplate.id")
+    test_template: Optional["TestTemplate"] = Relationship(back_populates="generalInfo")
+    
+    class Create(SQLModel):
+        name: str
+        value: str
+        isLink: bool
+        link: Optional[str] = None
+        isFile: bool
+    
+    class Read(SQLModel):
+        name: str
+        value: str
+        isLink: bool
+        link: Optional[str] = None
+        isFile: bool
+
+
+class TestTemplateCondition(SQLModel, table=True):  # Changed to table=True
+    __tablename__ = "testtemplatecondition"
+    id: UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    name: str
+    value: float
+    physicalQuantity: str
+    required: bool
+    test_template_id: Optional[UUID] = Field(default=None, foreign_key="testtemplate.id")
+    test_template: Optional["TestTemplate"] = Relationship(back_populates="conditions")
+    
+    class Create(SQLModel):
+        name: str
+        value: float
+        physicalQuantity: str
+        required: bool
+    
+    class Read(SQLModel):
+        name: str
+        value: float
+        physicalQuantity: str
+        required: bool
+
+
+class TestTemplateReading(SQLModel, table=True):  # Changed to table=True
+    __tablename__ = "testtemplatereading"
+    id: UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    name: str
+    value: Optional[str] = None  # formula
+    physicalQuantity: str
+    isRequired: bool
+    test_template_id: Optional[UUID] = Field(default=None, foreign_key="testtemplate.id")
+    test_template: Optional["TestTemplate"] = Relationship(back_populates="readings")
+    
+    class Create(SQLModel):
+        name: str
+        value: Optional[str] = None
+        physicalQuantity: str
+        isRequired: bool
+    
+    class Read(SQLModel):
+        name: str
+        value: Optional[str] = None
+        physicalQuantity: str
+        isRequired: bool
+
+
+class TestTemplateBase(SQLModel):
+    name: str
+    tags: List[str] = Field(default_factory=list, sa_column=Column(PG_JSONB))
+    isVLCompatible: bool
+    version: int
+    isLastVersion: bool
+
+    createdAt: datetime
+    updatedBy: Optional[UUID] = None
+    updatedAt: datetime
+    updatedBy: Optional[UUID] = None
+
+    is_deleted: bool = False
+    deleted_at: Optional[datetime] = None
+    deleted_by: Optional[UUID] = None
+
+
+class TestTemplate(TestTemplateBase, table=True):
+    id: UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    
+    # Remove the explicit foreign key and let the relationship handle it
+    generalInfo: Optional["TestTemplateGeneralInfo"] = Relationship(
+        back_populates="test_template",
+        sa_relationship_kwargs={"uselist": False}
+    )
+
+    conditions: List["TestTemplateCondition"] = Relationship(
+        back_populates="test_template", 
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    readings: List["TestTemplateReading"] = Relationship(
+        back_populates="test_template", 
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    
+    class Create(SQLModel):
+        name: str
+        tags: List[str] = Field(default_factory=list, sa_column=Column(PG_JSONB))
+        isVLCompatible: bool
+        version: int
+        isLastVersion: bool
+        generalInfo: Optional["TestTemplateGeneralInfo.Create"]
+        conditions: List["TestTemplateCondition.Create"] = []
+        readings: List["TestTemplateReading.Create"] = []
+    
+    class Read(SQLModel):
+        id: UUID
+        name: str
+        tags: List[str] = Field(default_factory=list, sa_column=Column(PG_JSONB))
+        isVLCompatible: bool
+        version: int
+        isLastVersion: bool
+        createdAt: datetime
+        is_deleted: bool = False
+        updatedAt: datetime
+        deleted_at: Optional[datetime] = None
+        generalInfo: Optional["TestTemplateGeneralInfo.Read"] = None
+        conditions: List["TestTemplateCondition.Read"] = []
+        readings: List["TestTemplateReading.Read"] = []
+    
+    class Update(SQLModel):
+        name: Optional[str] = None
+        tags: Optional[List[str]] = None
+        isVLCompatible: Optional[bool] = None
+        version: Optional[int] = None
