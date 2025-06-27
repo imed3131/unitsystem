@@ -1,0 +1,42 @@
+units:
+  - type: "linear"
+    name: "meter"
+    base: "meter"
+    factorToBase: 1.0
+
+  - type: "linear"
+    name: "centimeter"
+    base: "meter"
+    factorToBase: 0.01
+
+  - type: "linear"
+    name: "inch"
+    base: "meter"
+    factorToBase: 0.0254
+
+  - type: "linear"
+    name: "kilometer"
+    base: "meter"
+    factorToBase: 1000.0
+
+  - type: "linear"
+    name: "gram"
+    base: "kilogram"
+    factorToBase: 0.001
+
+  - type: "linear"
+    name: "pound"
+    base: "kilogram"
+    factorToBase: 0.453592
+
+  - type: "functional"
+    name: "celsius"
+    base: "kelvin"
+    toBase: "lambda c: c + 273.15"
+    fromBase: "lambda k: k - 273.15"
+
+  - type: "functional"
+    name: "fahrenheit"
+    base: "kelvin"
+    toBase: "lambda f: (f - 32) * 5/9 + 273.15"
+    fromBase: "lambda k: (k - 273.15) * 9/5 + 32"
