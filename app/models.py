@@ -126,8 +126,8 @@ class NewPassword(SQLModel):
 class UnitBase(SQLModel):
     name: str
     base: str
-    createdAt: datetime
-    createdBy: UUID
+    createdAt: Optional[datetime] = None
+    createdBy: Optional[UUID] = None
     is_deleted: bool = Field(default=False)
     deleted_at: Optional[datetime] = None
     deleted_by: Optional[UUID] = None
@@ -149,24 +149,14 @@ class UnitSystem(SQLModel, table=True):
 
     physical_quantities: List["PhysicalQuantity"] = Relationship(back_populates="unit_system")
 
-# Link models defined early
-class LinearUnitPhysicalQuantityLink(SQLModel, table=True):
-    __tablename__ = "linearunitphysicalquantitylink"
-    linear_unit_id: UUID = Field(foreign_key="linearunit.id", primary_key=True)
-    physical_quantity_id: UUID = Field(foreign_key="physicalquantity.id", primary_key=True)
-
-class FunctionalUnitPhysicalQuantityLink(SQLModel, table=True):
-    __tablename__ = "functionalunitphysicalquantitylink"
-    functional_unit_id: UUID = Field(foreign_key="functionalunit.id", primary_key=True)
-    physical_quantity_id: UUID = Field(foreign_key="physicalquantity.id", primary_key=True)
+# Link models are no longer needed since each PhysicalQuantity only has one unit (either linear or functional)
 
 class LinearUnit(UnitBase, table=True):
     __tablename__ = "linearunit"
     id: UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     factorToBase: float
     physical_quantities: List["PhysicalQuantity"] = Relationship(
-        back_populates="linear_units",
-        link_model=LinearUnitPhysicalQuantityLink
+        back_populates="linear_unit"
     )
 
 class FunctionalUnit(UnitBase, table=True):
@@ -175,8 +165,7 @@ class FunctionalUnit(UnitBase, table=True):
     toBase: str
     fromBase: str
     physical_quantities: List["PhysicalQuantity"] = Relationship(
-        back_populates="functional_units",
-        link_model=FunctionalUnitPhysicalQuantityLink
+        back_populates="functional_unit"
     )
 
 class PhysicalQuantity(SQLModel, table=True):
@@ -184,26 +173,26 @@ class PhysicalQuantity(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     quantity: str
     value: str
+    type: str
     unit_system_id: Optional[UUID] = Field(default=None, foreign_key="unitsystem.id")
-    
+    linear_unit_id: Optional[UUID] = Field(default=None, foreign_key="linearunit.id")
+    functional_unit_id: Optional[UUID] = Field(default=None, foreign_key="functionalunit.id")
+
     # Relationships
     unit_system: Optional["UnitSystem"] = Relationship(back_populates="physical_quantities")
-    linear_units: List["LinearUnit"] = Relationship(
-        back_populates="physical_quantities",
-        link_model=LinearUnitPhysicalQuantityLink
-    )
-    functional_units: List["FunctionalUnit"] = Relationship(
-        back_populates="physical_quantities",
-        link_model=FunctionalUnitPhysicalQuantityLink
-    )
+    linear_unit: Optional["LinearUnit"] = Relationship(back_populates="physical_quantities")
+    functional_unit: Optional["FunctionalUnit"] = Relationship(back_populates="physical_quantities")
     class Create(SQLModel):
         quantity: str
         value: str
+        type: str
+        unit_id : UUID
     class Read(SQLModel):
         quantity: str
         value: str
-        linear_units: List["LinearUnit"] 
-        functional_units: List["FunctionalUnit"]
+        type: str
+        linear_unit: Optional["LinearUnit"] = None
+        functional_unit: Optional["FunctionalUnit"] = None
 class UnitSystemRead(SQLModel):
     name: str
     physical_quantities: list["PhysicalQuantity.Read"]
