@@ -22,35 +22,6 @@ def create_unit_system(data: UnitSystemCreate, session: SessionDep):
         updatedAt=datetime.now(timezone.utc),
         is_deleted=False
     )
-    unit_system.physical_quantities = []
-
-    for pq in data.physical_quantities:
-        # Search for the unit by type and unit_id
-        if pq.type == "linear":
-            unit = session.get(LinearUnit, pq.unit_id)
-        elif pq.type == "functional":
-            unit = session.get(FunctionalUnit, pq.unit_id)
-        else:
-            raise HTTPException(status_code=400, detail=f"Unknown unit type: {pq.type}")
-
-        if not unit:
-            raise HTTPException(status_code=404, detail=f"Unit not found for id {pq.unit_id} and type {pq.type}")
-            # Create the PhysicalQuantity with the correct unit reference
-        if pq.type == "linear":
-            physical_quantity = PhysicalQuantity(
-            quantity=pq.quantity,
-            value=pq.value,
-            type=pq.type,
-            linear_unit_id=pq.unit_id
-            )
-        elif pq.type == "functional":
-            physical_quantity = PhysicalQuantity(
-            quantity=pq.quantity,
-            value=pq.value,
-            type=pq.type,
-            functional_unit_id=pq.unit_id
-            )
-        unit_system.physical_quantities.append(physical_quantity)
     session.add(unit_system)
     session.commit()
     session.refresh(unit_system)
@@ -67,6 +38,14 @@ def read_all_unit_systems(session: SessionDep):
     return session.exec(statement).all()
 
 
+
+
+@router.get("/physicalquantities", response_model=list[PhysicalQuantity.Read])
+def get_all_physical_quantities(session: SessionDep):
+    statement = select(PhysicalQuantity)
+    return session.exec(statement).all()
+
+
 # ==================================================
 
 # Reading a specific unit system by ID, updating it, and soft deleting it
@@ -75,7 +54,17 @@ def read_unit_system(unitsystem_id: UUID, session: SessionDep):
     unit = session.get(UnitSystem, unitsystem_id)
     if not unit or unit.is_deleted:
         raise HTTPException(status_code=404, detail="UnitSystem not found")
-    return unit
+    unitread = UnitSystemRead(
+        id=unit.id,
+        name=unit.name,
+        createdAt=unit.createdAt,
+        updatedAt=unit.updatedAt,
+        is_deleted=unit.is_deleted,
+        deleted_at=unit.deleted_at,
+        physical_quantities=session.exec(
+            select(PhysicalQuantity)
+        ).all())
+    return unitread
 
 @router.patch("/{unitsystem_id}", response_model=UnitSystemRead)
 def update_unit_system(unitsystem_id: UUID, data: UnitSystemUpdate, session: SessionDep):
@@ -90,7 +79,17 @@ def update_unit_system(unitsystem_id: UUID, data: UnitSystemUpdate, session: Ses
     session.add(unit)
     session.commit()
     session.refresh(unit)
-    return unit
+    unitread = UnitSystemRead(
+    id=unit.id,
+    name=unit.name,
+    createdAt=unit.createdAt,
+    updatedAt=unit.updatedAt,
+    is_deleted=unit.is_deleted,
+    deleted_at=unit.deleted_at,
+    physical_quantities=session.exec(
+        select(PhysicalQuantity)
+    ).all())
+    return unitread
 
 @router.delete("/{unitsystem_id}")
 def soft_delete_unit_system(unitsystem_id: UUID, session: SessionDep):
@@ -104,87 +103,81 @@ def soft_delete_unit_system(unitsystem_id: UUID, session: SessionDep):
     session.commit()
     return {"message": "UnitSystem soft deleted"}
 
-@router.get("/units/")
-def get_all_units(session: SessionDep):
-    linear_units = session.exec(select(LinearUnit).where(LinearUnit.is_deleted == False)).all()
-    functional_units = session.exec(select(FunctionalUnit).where(FunctionalUnit.is_deleted == False)).all()
-    return {
-        "linear_units": [{"id": u.id, "name": u.name, "type": "linear"} for u in linear_units],
-        "functional_units": [{"id": u.id, "name": u.name, "type": "functional"} for u in functional_units]
-    }
-@router.delete("/{unitsystem_id}")
-def soft_delete_unit_system(unitsystem_id: UUID, session: SessionDep):
-    unit = session.get(UnitSystem, unitsystem_id)
-    if not unit or unit.is_deleted:
-        raise HTTPException(status_code=404, detail="UnitSystem not found")
-
-    unit.is_deleted = True
-    unit.deleted_at = datetime.now(timezone.utc)
-    session.add(unit)
-    session.commit()
-    return {"message": "UnitSystem soft deleted"}
 
 
-@router.post("/{unitsystem_id}/physical_quantities")
-def add_physical_quantity(unitsystem_id: UUID, pq: PhysicalQuantity.Create, session: SessionDep):
-    unit_system = session.get(UnitSystem, unitsystem_id)
-
-    if pq.type == "linear":
-        unit = session.get(LinearUnit, pq.unit_id)
-    elif pq.type == "functional":
-        unit = session.get(FunctionalUnit, pq.unit_id)
-    else:
-        raise HTTPException(status_code=400, detail=f"Unknown unit type: {pq.type}")
-
-    if not unit:
-        raise HTTPException(status_code=404, detail=f"Unit not found for id {pq.unit_id} and type {pq.type}")
-
-
-    if not unit_system or unit_system.is_deleted:
-        raise HTTPException(status_code=404, detail="UnitSystem not found")
-        # Create a new PhysicalQuantity and associate it with the UnitSystem
-    if not pq.type or pq.type not in ["linear", "functional"]:
-        raise HTTPException(status_code=400, detail="Type is required for PhysicalQuantity")
-    if pq.type == "linear":
-        new_pq = PhysicalQuantity(
-            quantity=pq.quantity,
-            value=pq.value,
-            unit_system_id=unit_system.id,
-            type=pq.type,
-            linear_unit_id=pq.unit_id
-        )
-    elif pq.type == "functional":
-        new_pq = PhysicalQuantity(
-            quantity=pq.quantity,
-            value=pq.value,
-            unit_system_id=unit_system.id,
-            type=pq.type,
-            functional_unit_id=pq.unit_id
-        )
-    else:
-        raise HTTPException(status_code=400, detail="Unknown unit type")
-    session.add(new_pq)
-    unit_system.physical_quantities.append(new_pq)
-    session.commit()
-    session.refresh(unit_system)
-    return unit_system
-
-@router.delete("/{unitsystem_id}/physical_quantities/{pq_id}", response_model=UnitSystemRead)
-def remove_physical_quantity(unitsystem_id: UUID, pq_id: UUID, session: SessionDep):
-    unit_system = session.get(UnitSystem, unitsystem_id)
-    if not unit_system or unit_system.is_deleted:
-        raise HTTPException(status_code=404, detail="UnitSystem not found")
+@router.delete("/physicalquantities/{pq_id}", status_code=204)
+def delete_physical_quantity(pq_id: UUID, session: SessionDep):
     pq = session.get(PhysicalQuantity, pq_id)
-    if not pq or pq.unit_system_id != unitsystem_id:
-        raise HTTPException(status_code=404, detail="PhysicalQuantity not found in this UnitSystem")
+    if not pq:
+        raise HTTPException(status_code=404, detail="PhysicalQuantity not found")
     session.delete(pq)
     session.commit()
-    session.refresh(unit_system)
-    return unit_system
 
+@router.patch("/physicalquantities/{pq_id}", response_model=PhysicalQuantity.Read)
+def update_physical_quantity(pq_id: UUID, data: PhysicalQuantity.Create, session: SessionDep):
+    pq = session.get(PhysicalQuantity, pq_id)
+    if not pq:
+        raise HTTPException(status_code=404, detail="PhysicalQuantity not found")
+    for key, value in data.dict(exclude_unset=True).items():
+        setattr(pq, key, value)
+    session.add(pq)
+    session.commit()
+    session.refresh(pq)
+    return pq
 
-@router.post("/addunits")
-def add_physical_quantity_to_unit_system(session: SessionDep):
+@router.post("/physicalquantities/{pq_id}/addlinearunit", response_model=LinearUnit.Create)
+def add_linear_unit_to_physical_quantity(
+    pq_id: UUID,
+    unit_data: LinearUnit.Create,
+    session: SessionDep
+):
+    pq = session.get(PhysicalQuantity, pq_id)
+    if not pq:
+        raise HTTPException(status_code=404, detail="PhysicalQuantity not found")
+    unit = LinearUnit(
+        name=unit_data.name,
+        value=unit_data.value,
+        base = unit_data.base , 
+        factorToBase=unit_data.factorToBase,
+    )
+    session.add(unit)
+    session.commit()
+    session.refresh(unit)
+
+    pq.linear_units.append(unit)
+    session.add(pq)
+    session.commit()
+    session.refresh(pq)
+    return unit 
+
+@router.post("/physicalquantities/{pq_id}/addfunctionalunit", response_model=FunctionalUnit.Create)
+def add_functional_unit_to_physical_quantity(
+    pq_id: UUID,
+    unit_data: FunctionalUnit.Create,
+    session: SessionDep
+):
+    pq = session.get(PhysicalQuantity, pq_id)
+    if not pq:
+        raise HTTPException(status_code=404, detail="PhysicalQuantity not found")
+    unit = FunctionalUnit(
+        name=unit_data.name,
+        value=unit_data.value,
+        base = unit_data.base , 
+        toBase=unit_data.toBase,
+        fromBase=unit_data.fromBase,
+    )
+    session.add(unit)
+    session.commit()
+    session.refresh(unit)
+
+    pq.functional_units.append(unit)
+    session.add(pq)
+    session.commit()
+    session.refresh(pq)
+    return unit
+
+@router.post("/addphysicalquantities")
+def add_physical_quantities_from_yaml(session: SessionDep):
     # Get path to config directory
     config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "config")
     units_yaml_path = os.path.join(config_dir, "units.yaml")
@@ -194,36 +187,16 @@ def add_physical_quantity_to_unit_system(session: SessionDep):
     with open(units_yaml_path, "r") as file:
         data = yaml.safe_load(file)
 
-    units = data.get("units", [])
-    created_units = []
-    for unit in units:
-        # Check for existing unit by name and type
-        if unit["type"] == "linear":
-            exists = session.exec(
-                select(LinearUnit).where(LinearUnit.name == unit["name"])
-            ).first()
-            if exists:
-                continue
-            new_unit = LinearUnit(
-                name=unit["name"],
-                base=unit["base"],
-                factorToBase=unit["factorToBase"]
-            )
-        elif unit["type"] == "functional":
-            exists = session.exec(
-                select(FunctionalUnit).where(FunctionalUnit.name == unit["name"])
-            ).first()
-            if exists:
-                continue
-            new_unit = FunctionalUnit(
-                name=unit["name"],
-                base=unit["base"],
-                toBase=unit["toBase"],
-                fromBase=unit["fromBase"]
-            )
-        else:
+    physical_quantities = data.get("physicalQuantities", [])
+    created_quantities = []
+    for pq in physical_quantities:
+        name = pq.get("name")
+        if not name:
             continue
-        session.add(new_unit)
-        created_units.append(new_unit)
-    session.commit()
-    return {"message": f"{len(created_units)} units added", "units": [u.name for u in created_units]}
+        new_pq = PhysicalQuantity(
+            quantity=name
+        )
+        session.add(new_pq)
+        created_quantities.append(new_pq)
+        session.commit()
+    return {"message": f"{len(created_quantities)} physical quantities added", "physical_quantities": [q.quantity for q in created_quantities]}
